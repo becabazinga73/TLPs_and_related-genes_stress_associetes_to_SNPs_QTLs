@@ -1,0 +1,395 @@
+---
+title: "SNP-to-gene mapping"
+author: "Rebeca de Souza Brinco"
+date: "April 19, 2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## SNP-to-gene mapping
+
+# First, we need to choose which sliding window we will use to pick putative candidate genes. For that, we will perform simulations of sliding windows from 100 kb to 2 Mb with increments of 100 kb.
+
+```{r simulate_windows}
+library(ggplot2)
+library(here)
+library(GenomicRanges)
+library(GenomeInfoDb)
+library(cageminer)
+library(tidyverse)
+
+# Load SNP ranges
+load("/media/winterfell/rebeca/Project_2023/Project/Products/result_files/snp_granges.rda")
+
+# Create a gene-based GRanges object
+gff <- rtracklayer::import("/media/winterfell/rebeca/Project_2023/Project/Data/PLAZA_selected.transcripts.gff.gz")
+gff_gene <- gff[gff$type == "gene", ]
+
+```
+
+
+# Let's divide the types of stress (biotic and abiotic) to make the same kind of plot.
+
+```{r}
+
+library(viridis)
+
+# Geral
+load("/media/winterfell/rebeca/Project_2023/Project/Products/result_files/snp_granges.rda")
+
+
+# Biotic
+
+# Load SNP ranges
+load("/media/winterfell/rebeca/Project_2023/Project/Products/result_files/snp_granges_biotic.rda")
+
+# Create a gene-based GRanges object
+gff <- rtracklayer::import("/media/winterfell/rebeca/Project_2023/Project/Data/PLAZA_selected.transcripts.gff.gz")
+gff_gene <- gff[gff$type == "gene", ]
+
+# Simulate sliding windows
+
+sims <- simulate_windows(gff_gene, snp_grangeslist_biotic)
+sims2 <- sims + 
+  geom_hline(yintercept=5604, col="darkred", linetype="dashed") +
+  annotate("text", x = "1.8", y = 6200, label = "10%", col="darkred") +
+scale_color_viridis(discrete = TRUE, option = "H")
+ggsave(sims2,
+       filename = "/media/winterfell/rebeca/Project_2023/Project/Products/plots/simulation_genes_per_sliding_window_biotic.png", width=9, height=5)
+
+
+# Abiotic
+
+# Load SNP ranges
+load("/media/winterfell/rebeca/Project_2023/Project/Products/result_files/snp_granges_abiotic.rda")
+
+# Create a gene-based GRanges object
+gff <- rtracklayer::import("/media/winterfell/rebeca/Project_2023/Project/Data/PLAZA_selected.transcripts.gff.gz")
+gff_gene <- gff[gff$type == "gene", ]
+
+# Simulate sliding windows
+
+sims <- simulate_windows(gff_gene, snp_grangeslist_abiotic)
+sims2 <- sims + 
+  geom_hline(yintercept=5604, col="darkred", linetype="dashed") +
+  annotate("text", x = "1.8", y = 6200, label = "10%", col="darkred") +
+  scale_color_brewer(palette = "PuOr")
+ggsave(sims2,
+       filename = "/media/winterfell/rebeca/Project_2023/Project/Products/plots/simulation_genes_per_sliding_window_abiotic.png", width=9, height=5)
+```
+
+
+# Ideally, we should pick all genes in a sliding window of 2 Mb as possible candidates. However, there is trade-off, because the more we increase the number of candidate genes, the more noise we add to our data. Although the number of gene will be high for *Fusarium virguliforme*, we will pick genes in a 2Mb sliding window nevertheless.
+
+```{r get_candidates}
+# Extract list of genes in 2 Mb sliding window
+candidates <- mine_step1(gff_gene, snp_grangeslist)
+# Save object for further analyses
+save(candidates, file = "/media/winterfell/rebeca/Project_2023/Project/Products/result_files/all_candidates.rda",
+     compress="xz")
+```
+
+### Candidate gene mining
+
+```{r}
+# select species of biotic stress in metadata
+
+uvalues_biotic <- as.data.frame(unique(metadata_biotic$Pathogen))
+uvalues_number_biotic <- uvalues_biotic %>%
+  count(Pathogen, sort = TRUE)
+
+matrix_biotic <- as.matrix(unique(snp_ranges_biotic))
+
+matrix_biotic_metadata <- as.matrix(unique(snp_ranges_biotic))
+  
+# select traits of abiotic stress in metadata
+  
+uvalues <- as.matrix(unique(snp_ranges_abiotic$Trait))
+uvalues_number_abiotic <- snp_ranges_abiotic %>%
+  count(Trait, sort = TRUE)
+
+# select species of biotic stress in SNPs
+
+uvalues_biotic <- as.data.frame(unique(snp_ranges_biotic$Organism))
+uvalues_number_biotic <- snp_ranges_biotic %>%
+  count(Organism, sort = TRUE)
+
+matrix_biotic <- as.matrix(unique(snp_ranges_biotic))
+
+matrix_biotic_metadata <- as.matrix(unique(snp_ranges_biotic))
+
+
+# select traits of abiotic stress in metadata
+  
+uvalues <- as.matrix(unique(snp_ranges_abiotic$Trait))
+uvalues_number_abiotic <- snp_ranges_abiotic %>%
+  count(Trait, sort = TRUE)
+```
+
+
+# Now, we will mine candidate genes with {cageminer}. The species we will use are:
+
+
+-*Phakopsora pachyrhizi*: 12 samples
+-*Heterodera glycines*: 12
+- *Fusarium virguliforme*: 40
+- *Sclerotinia sclerotiorum*: 32
+- *Phytophthora sojae*: 301
+- *Psojae_glucan_elicitor*: 16
+- *Fusarium graminearum*: 12
+- *Meloidogyne incognita*: 5
+- *Spodoptera litura*: 6
+- *Soybean mosaic virus*: 29
+- *Fusarium equiseti*: 27
+- *Diaporthe phaseolorum*: 21
+- *Panicum mosaic virus*: 4
+- *Aphis glycines*: 100
+- *Xanthomonas axonopodis*: 41
+- *Tobacco Ringspot Virus*: 9
+- *Bean pod mottle virus*: 3
+- *Phialophora gregata*: 49
+- *Cadophora gregata*: 9
+- *Macrophomina phaseolina*: 16
+- *Pseudoplusia includens*: 1
+- *Rotylenchulus reniformis*: 1
+- *Epilachna varivestis*: 1
+- *Empoasca Fabae*: 1
+- *Phakopsora pachyrhizi*: 2
+- *Anticarsia gemmatalis*: 1
+- *Diaporthe aspalathi*: 19
+- *Cercospora sojina*: 13
+
+The follow species does not have samples in metadatas, just in SNPs data:
+
+- *Piper sylvaticum*: 17
+
+# Number of samples associated with abiotic stress:
+
+- salt: 37
+- iron: 100
+- alkaline_salt: 30
+- phosphorus: 120
+- flooding: 22
+
+# To start, let's get the guide genes.
+
+```{r get_guides}
+
+mapman <- readr::read_tsv("ftp://ftp.psb.ugent.be/pub/plaza/plaza_public_dicots_03//MapMan/mapman.gma.csv.gz", skip=8)
+mapman <- as.data.frame(mapman[, c(2,4)])
+
+#----Convert a1.v1 IDs to a2v1----
+ids_v1v2 <- read.csv(file = "/media/winterfell/rebeca/Project_2023/Project/Data/Gmax_v1_to_v2.txt", header=TRUE, sep="\t")
+annotation_mapman <- merge(mapman, ids_v1v2, by.x="gene_id", by.y="V1")
+annotation_mapman <- annotation_mapman[, c(3,2)]
+names(annotation_mapman) <- c("Gene", "Description")
+
+
+#----Get biotic stress-related genes----
+guides_biotic <- annotation_mapman %>%
+  filter(str_detect(
+    Description, "ethylene.induced|ethylene.signal|jasmonate.induced|misc.peroxidases|misc.protease inhibitor|protease|phenylpropanoids.lignin|receptor kinases.leucine rich|stress.biotic")
+    ) %>%
+  mutate(Description = str_replace_all(
+    Description,
+    c("lignin biosynthesis.*" = "lignin biosynthesis",
+      "rich repeat.*" = "rich repeat"))
+  ) %>%
+  filter(!str_detect(Description, "ubiquitin"))
+write_tsv(guides_biotic, "/media/winterfell/rebeca/Project_2023/Project/Products/tables/sup_table3_biotic.tsv")
+# EDA: Number of genes per class
+guides_biotic %>%
+  janitor::tabyl(Description) %>%
+  arrange(-n)
+
+#----Get abiotic stress-related genes----
+guides_abiotic <- annotation_mapman %>%
+  filter(str_detect(
+    Description, "stress.abiotic.*")
+    ) %>%
+  filter(!str_detect(Description, "ubiquitin"))
+write_tsv(guides_abiotic, 
+          here("/media/winterfell/rebeca/Project_2023/Project/Products/tables/sup_table4_abiotic.tsv"))
+# EDA: Number of genes per class
+guides_abiotic %>%
+  janitor::tabyl(Description) %>%
+  arrange(-n)
+
+```
+
+# Find high-confidence candidates.
+
+```{r}
+library(BioNERO)
+library(SummarizedExperiment)
+library(tidyverse)
+library(data.table)
+
+# Add metadata to colData() of Atlasv2.
+
+load("/media/winterfell/rebeca/Project_2023/Project/Data/se_atlas_gene.rda")
+metadata_stress_sample <- as.data.frame(fread("/media/winterfell/rebeca/Project_2023/Project/Data/atlas_metadata_stress_samples_Atlas_v2_short_pathogens.tsv"))
+row.names(metadata_stress_sample) <- metadata_stress_sample$BioSample
+metadata_stress_sample <- metadata_stress_sample %>%
+  select(-BioSample)
+
+
+colData(se_atlas_gene) <- DataFrame(metadata_stress_sample)
+
+```
+
+
+# Find high-confidence candidates.
+
+```{r mining}
+library(BioNERO)
+library(SummarizedExperiment)
+library(stringr)
+set.seed(1)
+
+
+
+#----Load and filter biotic expression data ----
+exp_biotic <- se_atlas_gene[, se_atlas_gene$Stress_class == "biotic" &
+                   !is.na(se_atlas_gene$Stress_class)]
+
+
+#----Infer a single GCN for all species----
+exp_biotic_2 <- exp_preprocess(exp_biotic, min_exp=5, Zk_filtering=FALSE)
+metadata_biotic <- colData(exp_biotic_2) %>%
+  as.data.frame() %>%
+  mutate(Pathogen = str_sub(Pathogen, 1, 3)) %>%
+  mutate(annot = paste(Pathogen, Sample_description, sep = "_")) %>%
+  select(annot)
+colData(exp_biotic_2) <- DataFrame(metadata_biotic)
+sft_biotic <- SFT_fit(exp_biotic_2, net_type="unsigned", cor_method="pearson")
+gcn_biotic <- exp2gcn(exp_biotic_2, net_type="unsigned", cor_method="pearson",
+                     SFTpower=sft_biotic$power)
+
+#----Mine candidates----
+# P. pachyrhizi
+mining_ppachyrhizi <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Ppachyrhizi,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Ppa_stress_res_24h", "Ppa_stress_sus_24h")
+)
+length(unique(mining_ppachyrhizi$gene))
+
+
+
+# H. glycines
+
+mining_hglycines <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Hglycines,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Hgly_stress", "Hgly_stress_5days", "Hgly_stress_10days", "Hgly_stress_15days", "Hgly_stress_virulent", "Hgly_stress_avirulent")
+)
+length(unique(mining_hglycines$gene))
+
+# F. virguliforme
+
+mining_fvirguliforme <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Fvirguliforme,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Fvi_stress_0dpi","Fvi_stress_2dpi", "Fvi_stress_4dpi", "Fvi_stress_7dpi", "Fvi_stress_10dpi", "Fvi_stress_14dpi", "Fvi_stress_10-24days", "Fvi_stress_3-5days")
+)
+length(unique(mining_fvirguliforme$gene))
+
+
+# S. sclerotiorum
+
+mining_ssclerotiorum <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Ssclerotiorum,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Ssc_stress", "Ssc_stress_96h_sus", "Ssc_stress_48h_sus", "Ssc_stress_24h_sus", "Ssc_stress_96h_res", "Ssc_stress_48h_res", "Ssc_stress_24h_res")
+)
+length(unique(mining_ssclerotiorum$gene))
+
+# P. sojae
+
+mining_psojae <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Psojae,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Pso_stress", "Pso_sstress_rps1b", "Pso_stress_williams", "Pso_stress_rps1k", "Pso_stress_rps3-c", "Pso_stress_rps3-a", "Pso_stress_rps3-b", "Pso_stress_rps4", "Pso_stress_rps5", "Pso_stress_rps1-a", "Pso_stress_rps6", "Pso_NA", "Pso_stress_4dpi_Si+", "Pso_stress_14dpi_Si+", "Pso_stress_c12011", "Pso_stress_c12013", "Pso_stress_c12016", "Pso_stress_c12019", "Pso_stress_c12028", "Pso_stress_c12029", "Pso_stress_c12030", "Pso_stress_c12038", "Pso_stress_c12042", "Pso_stress_c12049", "Pso_stress_c12051", "Pso_stress_c12053", "Pso_stress_c12054", "Pso_stress_c12056", "Pso_stress_c12057", "Pso_stress_c12061", "Pso_stress_c12063", "Pso_stress_c12065", "Pso_stress_12068", "Pso_stress_12069", "Pso_stress_c12071", "Pso_stress_c12073", "Pso_stress_c12074", "Pso_stress_c12075", "Pso_stress_c12076", "Pso_stress_c12082", "Pso_stress_c12090", "Pso_stress_c12091", "Pso_stress_c12092", "Pso_stress_c12099", "Pso_stress_c12100", "Pso_stress_c12101", "Pso_stress_c12104", "Pso_stress_c12108", "Pso_stress_c12109", "Pso_stress_c12122", "Pso_stress_c12124", "Pso_stress_c12132", "Pso_stress_c12133", "Pso_stress_c12137", "Pso_stress_c12141", "Pso_stress_c12144", "Pso_stress_c12147", "Pso_stress_c12150", "Pso_stress_c12154", "Pso_stress_c12151", "Pso_stress_c12157", "Pso_stress_c12158", "Pso_stress_c12165", "Pso_stress_c12167", "Pso_stress_c12171", "Pso_stress_c12178", "Pso_stress_c12183", "Pso_stress_12188", "Pso_stress_c12199", "Pso_stress_c12200", "Pso_stress_c12210", "Pso_stress_c12213", "Pso_stress_c12214", "Pso_stress_c12225", "Pso_stress_c12230", "Pso_stress_c12231", "Pso_stress_c12232", "Pso_stress_c12233", "Pso_stress_c12236", "Pso_stress_c12238", "Pso_stress_c12244", "Pso_stress_c12247", "Pso_stress_c12251", "Pso_stress_c12253", "Pso_stress_c12257", "Pso_stress_c12259", "Pso_stress_c12265", "Pso_stress_c12272", "Pso_stress_c12274", "Pso_stress_c12278", "Pso_stress_c12279", "stress_c12280", "stress_c12282", "stress_c12289", "stress_c12295", "Pso_stress_c12299", "Pso_stress_c12301", "Pso_stress_c12306", "Pso_stress_c12309", "Pso_stress_c12310", "Pso_stress_c12312", "Pso_stress_c12315", "Pso_stress_c12316", "Pso_stress_c12317", "Pso_stress_c12318", "Pso_stress_c12319", "Pso_stress_c12333", "Pso_stress_conrad", "Pso_stress_sloan", "Pso_stress_M16_D4", "Pso_stress_M17_D4", "Pso_stress_ M18_D4", "Pso_stress_M19_D7", "Pso_stress_M21_D7", "Pso_stress_M22_D14", "Pso_stress_M23_D14", "Pso_stress_M25_D14", "Pso_stress_P16_D4", "Pso_stress_P17_D4", "Pso_stress_P18_D4", "Pso_stress_ P19_D7", "Pso_stress_P20_D7", "Pso_stress_ P21_D7", "Pso_stress_P22_D14", "Pso_stress_P23_D14", "Pso_stress_P24_D14", "Pso_stress_P26_D21", "Pso_stress_P27_D21")
+)
+length(unique(mining_psojae$gene))
+
+# Psojae_glucan_elicitor
+
+mining_pso_glu_eli <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Pso_glu_eli,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Pso_glu_eli_stress_48h", "Pso_glu_eli_sstress_24h")
+)
+length(unique(mining_pso_glu_eli$gene))
+
+# F. graminearum
+
+mining_fgraminearum <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Fgraminearum,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Fgraminearum_stress_PI567301B", "Fgraminearum_stress_wyandot"))
+length(unique(mining_fgraminearum$gene))
+
+# M. incognita
+
+mining_mincognita <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Mincognita,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Mincognita_stress_4days_sus", "Mincognita_stress_12days_sus", "Mincognita_stress_30days_sus", "Mincognita_stress_4days_tol", "Mincognita_stress_12days_tol", "Mincognita_stress_30days_tol"))
+
+length(unique(mining_mincognita$gene))
+
+# P. sylvaticum
+
+mining_psylvaticum <- mine_candidates(
+  gene_ranges = gff_gene, 
+  marker_ranges = snp_grangeslist$Psylvaticum,
+  exp = exp_biotic_2,
+  gcn = gcn_biotic,
+  guides = guides,
+  metadata = metadata_biotic,
+  sample_group = c("Mincognita_stress_4days_sus", "Mincognita_stress_12days_sus", "Mincognita_stress_30days_sus", "Mincognita_stress_4days_tol", "Mincognita_stress_12days_tol", "Mincognita_stress_30days_tol"))
+
+length(unique(mining_psylvaticum$gene))
+
+
+
+
+```
+
